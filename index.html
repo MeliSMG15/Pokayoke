@@ -805,7 +805,7 @@
             <option value="">Todos</option>
             <option value="CONTAINER_MISMATCH">CONTAINER_MISMATCH</option>
             <option value="QR_PROBLEM">QR_PROBLEM</option>
-            <option value="QR_PROBLEM_WITHOUT_POKAYOKE">QR_PROBLEM_WITHOUT_POKAYOKE</option>
+            <option value="QR_PROBLEM_WITHOUT_POKAYOKE">QR sem pokayoke</option>
             <option value="FORCE_EXIT">FORCE_EXIT</option>
             <option value="SHIPMENT_MISMATCH">SHIPMENT_MISMATCH</option>
           </select>
@@ -977,6 +977,11 @@
       'FORCE_EXIT',
       'SHIPMENT_MISMATCH',
     ];
+    // labels mais curtos pra exibição (mantém o valor original em filtros e dados)
+    const EVENT_TYPE_LABEL = {
+      QR_PROBLEM_WITHOUT_POKAYOKE: 'QR sem pokayoke',
+    };
+    const evLabel = (t) => EVENT_TYPE_LABEL[t] || t;
 
     // ════════════════════════════════════════════════════════════
     // STATE
@@ -1238,7 +1243,7 @@
         return `
           <div class="row${verified ? ' verified' : ''}" data-key="${escapeHTML(e._key)}">
             <div class="col-mono">${escapeHTML(dateStr)}</div>
-            <div><span class="ev-badge ${evClass}">${escapeHTML(e.EVENT_TYPE)}</span></div>
+            <div><span class="ev-badge ${evClass}">${escapeHTML(evLabel(e.EVENT_TYPE))}</span></div>
             <div class="person-pill">
               <span class="id">${escapeHTML(e.OPERATOR_ID)}</span>
               ${nameDisplay}
@@ -1268,12 +1273,12 @@
       const opName = state.operators[ev.OPERATOR_ID] || 'não cadastrado';
       const dateStr = ev._date ? ev._date.toLocaleString('pt-BR') : (ev.EVENT_DATE || '—');
 
-      document.getElementById('ev-modal-title').textContent = `${ev.EVENT_TYPE} — ${dateStr}`;
+      document.getElementById('ev-modal-title').textContent = `${evLabel(ev.EVENT_TYPE)} — ${dateStr}`;
 
       const grid = document.getElementById('ev-info-grid');
       grid.innerHTML = `
         <div class="info-cell"><div class="l">Operador</div><div class="v">${escapeHTML(ev.OPERATOR_ID)} · ${escapeHTML(opName)}</div></div>
-        <div class="info-cell"><div class="l">Tipo</div><div class="v">${escapeHTML(ev.EVENT_TYPE)}</div></div>
+        <div class="info-cell"><div class="l">Tipo</div><div class="v">${escapeHTML(evLabel(ev.EVENT_TYPE))}</div></div>
         <div class="info-cell"><div class="l">Pacote (shipment)</div><div class="v">${escapeHTML(ev.SHIPMENT_ID || '—')}</div></div>
         <div class="info-cell"><div class="l">Pacote errado</div><div class="v">${ev.WRONG_SHIPMENT_ID && ev.WRONG_SHIPMENT_ID !== '0' ? escapeHTML(ev.WRONG_SHIPMENT_ID) : '—'}</div></div>
         <div class="info-cell"><div class="l">Container correto</div><div class="v">${ev.CONTAINER_ID && ev.CONTAINER_ID !== '0' ? escapeHTML(ev.CONTAINER_ID) : '—'}</div></div>
@@ -1450,7 +1455,7 @@
       const typeEl = document.getElementById('type-grid');
       typeEl.innerHTML = EVENT_TYPES.map(t => `
         <div class="type-card t-${t}">
-          <div class="type-card-label">${t}</div>
+          <div class="type-card-label">${evLabel(t)}</div>
           <div class="type-card-value">${typeCounts[t] || 0}</div>
         </div>
       `).join('');
