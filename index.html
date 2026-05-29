@@ -796,14 +796,6 @@
     <section class="tab-content active" id="tab-events">
       <div class="filters">
         <div class="filter-group">
-          <span class="filter-label">De</span>
-          <input type="date" class="input" id="f-from" />
-        </div>
-        <div class="filter-group">
-          <span class="filter-label">Até</span>
-          <input type="date" class="input" id="f-to" />
-        </div>
-        <div class="filter-group">
           <span class="filter-label">Buscar</span>
           <input type="text" class="input search" id="f-search" placeholder="operador, pacote, container, rota..." />
         </div>
@@ -818,10 +810,16 @@
             <option value="SHIPMENT_MISMATCH">SHIPMENT_MISMATCH</option>
           </select>
         </div>
-        <div class="chips" id="f-status">
-          <button class="chip-btn active" data-status="all" type="button">Tudo</button>
-          <button class="chip-btn" data-status="pending" type="button">Pendentes</button>
-          <button class="chip-btn" data-status="verified" type="button">Verificados</button>
+        <div class="filter-group">
+          <span class="filter-label">Status</span>
+          <select class="input select" id="f-location-status">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="chips" id="f-verification">
+          <button class="chip-btn active" data-verification="all" type="button">Verificação: tudo</button>
+          <button class="chip-btn" data-verification="pending" type="button">Pendentes</button>
+          <button class="chip-btn" data-verification="verified" type="button">Verificados</button>
         </div>
         <div class="chips" id="f-goleiro">
           <button class="chip-btn active" data-goleiro="all" type="button">Goleiro: tudo</button>
@@ -988,11 +986,10 @@
       operators: {},       // { id: name }
       verifications: {},   // { eventKey: { observation, verifiedAt, verifiedBy? } }
       filters: {
-        from: '',
-        to: '',
         search: '',
         type: '',
-        status: 'all',
+        locationStatus: '',
+        verification: 'all',
         goleiro: 'all',
       },
       modalEventKey: null,
@@ -1152,30 +1149,40 @@
       const f = state.filters;
       const q = f.search.trim().toLowerCase();
       return state.events.filter(e => {
-        // data
-        if (f.from || f.to) {
-          if (!e._date) return false;
-          const iso = e._date.toISOString().slice(0,10);
-          if (f.from && iso < f.from) return false;
-          if (f.to && iso > f.to) return false;
-        }
         // tipo
         if (f.type && e.EVENT_TYPE !== f.type) return false;
-        // status verificado
+        // status do pacote (coluna STATUS da planilha)
+        if (f.locationStatus && (e.STATUS || '') !== f.locationStatus) return false;
+        // verificação (interna)
         const verified = !!state.verifications[e._key];
-        if (f.status === 'verified' && !verified) return false;
-        if (f.status === 'pending' && verified) return false;
+        if (f.verification === 'verified' && !verified) return false;
+        if (f.verification === 'pending' && verified) return false;
         // goleiro
         const isGoleiro = (e.GOLEIRO || '').toUpperCase() === 'SIM';
         if (f.goleiro === 'yes' && !isGoleiro) return false;
         if (f.goleiro === 'no' && isGoleiro) return false;
         // busca
         if (q) {
-          const hay = `${e.OPERATOR_ID} ${state.operators[e.OPERATOR_ID] || ''} ${e.SHIPMENT_ID} ${e.WRONG_SHIPMENT_ID} ${e.CONTAINER_ID} ${e.WRONG_CONTAINER_ID} ${e['ROTA CERTA']} ${e['ROTA ERRADA']} ${e.EVENT_TYPE}`.toLowerCase();
+          const hay = `${e.OPERATOR_ID} ${state.operators[e.OPERATOR_ID] || ''} ${e.SHIPMENT_ID} ${e.WRONG_SHIPMENT_ID} ${e.CONTAINER_ID} ${e.WRONG_CONTAINER_ID} ${e['ROTA CERTA']} ${e['ROTA ERRADA']} ${e.EVENT_TYPE} ${e.STATUS || ''}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
       });
+    }
+
+    function refreshLocationStatusOptions() {
+      const sel = document.getElementById('f-location-status');
+      const current = sel.value;
+      const set = new Set();
+      for (const e of state.events) {
+        const s = (e.STATUS || '').trim();
+        if (s) set.add(s);
+      }
+      const opts = ['<option value="">Todos</option>'];
+      [...set].sort().forEach(s => opts.push(`<option value="${escapeHTML(s)}">${escapeHTML(s)}</option>`));
+      sel.innerHTML = opts.join('');
+      // mantém seleção atual se ainda existir
+      if (current && set.has(current)) sel.value = current;
     }
 
     // ════════════════════════════════════════════════════════════
@@ -1450,6 +1457,7 @@
     }
 
     function renderAll() {
+      refreshLocationStatusOptions();
       renderEvents();
       renderOperators();
       renderStats();
@@ -1467,13 +1475,6 @@
     // BOOT
     // ════════════════════════════════════════════════════════════
     document.addEventListener('DOMContentLoaded', () => {
-      // filtros default: dia de hoje
-      const today = todayISO();
-      document.getElementById('f-from').value = today;
-      document.getElementById('f-to').value = today;
-      state.filters.from = today;
-      state.filters.to = today;
-
       startFirebaseListeners();
       fetchEvents();
       setInterval(fetchEvents, REFRESH_INTERVAL_MS);
@@ -1482,14 +1483,13 @@
       document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => switchTab(b.dataset.tab)));
 
       // filters
-      document.getElementById('f-from').addEventListener('change', e => { state.filters.from = e.target.value; renderAll(); });
-      document.getElementById('f-to').addEventListener('change', e => { state.filters.to = e.target.value; renderAll(); });
       document.getElementById('f-search').addEventListener('input', e => { state.filters.search = e.target.value; renderEvents(); renderStats(); });
       document.getElementById('f-type').addEventListener('change', e => { state.filters.type = e.target.value; renderAll(); });
-      document.querySelectorAll('#f-status .chip-btn').forEach(c => {
+      document.getElementById('f-location-status').addEventListener('change', e => { state.filters.locationStatus = e.target.value; renderAll(); });
+      document.querySelectorAll('#f-verification .chip-btn').forEach(c => {
         c.addEventListener('click', () => {
-          state.filters.status = c.dataset.status;
-          document.querySelectorAll('#f-status .chip-btn').forEach(x => x.classList.toggle('active', x === c));
+          state.filters.verification = c.dataset.verification;
+          document.querySelectorAll('#f-verification .chip-btn').forEach(x => x.classList.toggle('active', x === c));
           renderAll();
         });
       });
@@ -1501,12 +1501,11 @@
         });
       });
       document.getElementById('btn-clear-filters').addEventListener('click', () => {
-        state.filters = { from: '', to: '', search: '', type: '', status: 'all', goleiro: 'all' };
-        document.getElementById('f-from').value = '';
-        document.getElementById('f-to').value = '';
+        state.filters = { search: '', type: '', locationStatus: '', verification: 'all', goleiro: 'all' };
         document.getElementById('f-search').value = '';
         document.getElementById('f-type').value = '';
-        document.querySelectorAll('#f-status .chip-btn').forEach(x => x.classList.toggle('active', x.dataset.status === 'all'));
+        document.getElementById('f-location-status').value = '';
+        document.querySelectorAll('#f-verification .chip-btn').forEach(x => x.classList.toggle('active', x.dataset.verification === 'all'));
         document.querySelectorAll('#f-goleiro .chip-btn').forEach(x => x.classList.toggle('active', x.dataset.goleiro === 'all'));
         renderAll();
       });
